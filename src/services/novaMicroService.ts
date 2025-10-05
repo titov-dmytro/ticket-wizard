@@ -5,8 +5,8 @@ export class NovaMicroService {
   private baseUrl: string;
 
   constructor() {
-    this.apiKey = process.env.REACT_APP_NOVA_MICRO_API_KEY || '';
-    this.baseUrl = process.env.REACT_APP_NOVA_MICRO_BASE_URL || 'https://api.nova-micro.com';
+    this.apiKey = import.meta.env?.VITE_NOVA_MICRO_API_KEY || '';
+    this.baseUrl = import.meta.env?.VITE_NOVA_MICRO_BASE_URL || 'https://api.nova-micro.com';
   }
 
   public async processUserQuery(
@@ -21,22 +21,22 @@ export class NovaMicroService {
     try {
       // For now, we'll implement a local processing system
       // In production, this would call the actual Nova Micro API
-      return this.processQueryLocally(query, packages, currentPreferences);
+      return await this.processQueryLocally(query, packages, currentPreferences);
     } catch (error) {
       console.error('Error processing query with Nova Micro:', error);
       throw new Error('Failed to process your request. Please try again.');
     }
   }
 
-  private processQueryLocally(
+  private async processQueryLocally(
     query: string, 
     packages: TicketPackage[], 
     currentPreferences?: UserPreferences
-  ): {
+  ): Promise<{
     response: string;
     updatedPreferences?: UserPreferences;
     suggestedPackages?: TicketPackage[];
-  } {
+  }> {
     const lowerQuery = query.toLowerCase();
     const preferences = currentPreferences || {};
 
@@ -97,12 +97,13 @@ export class NovaMicroService {
     // If user is asking for recommendations, find packages
     let suggestedPackages: TicketPackage[] | undefined;
     if (lowerQuery.includes('recommend') || lowerQuery.includes('suggest') || lowerQuery.includes('find') || lowerQuery.includes('show')) {
-      const { RecommendationEngine } = require('./recommendationEngine');
+      // Dynamic import to avoid require() in Vite
+      const { RecommendationEngine } = await import('./recommendationEngine');
       const engine = new RecommendationEngine(packages);
       const recommendations = engine.findRecommendations(preferences);
-      suggestedPackages = recommendations.map(r => r.package);
+      suggestedPackages = recommendations.map((r: any) => r.package);
       
-      if (suggestedPackages.length > 0) {
+      if (suggestedPackages && suggestedPackages.length > 0) {
         response += `\n\nI found ${suggestedPackages.length} packages that match your preferences:`;
       } else {
         response += "\n\nI couldn't find exact matches, but here are some similar options:";
