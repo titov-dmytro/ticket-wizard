@@ -96,18 +96,28 @@ export class NovaMicroService {
     
     // If user is asking for recommendations, find packages
     let suggestedPackages: TicketPackage[] | undefined;
-    if (lowerQuery.includes('recommend') || lowerQuery.includes('suggest') || lowerQuery.includes('find') || lowerQuery.includes('show')) {
+    if (lowerQuery.includes('recommend') || lowerQuery.includes('suggest') || lowerQuery.includes('find') || 
+        lowerQuery.includes('show') || lowerQuery.includes('want') || lowerQuery.includes('looking') ||
+        lowerQuery.includes('tickets') || lowerQuery.includes('events') || lowerQuery.includes('games')) {
       // Dynamic import to avoid require() in Vite
       const { RecommendationEngine } = await import('./recommendationEngine');
       const engine = new RecommendationEngine(packages);
-      const recommendations = engine.findRecommendations(preferences);
-      suggestedPackages = recommendations.map((r: any) => r.package);
       
-      if (suggestedPackages && suggestedPackages.length > 0) {
-        response += `\n\nI found ${suggestedPackages.length} packages that match your preferences:`;
+      if (Object.keys(preferences).length > 0) {
+        // User has specific preferences
+        const recommendations = engine.findRecommendations(preferences);
+        suggestedPackages = recommendations.map((r: any) => r.package);
+        
+        if (suggestedPackages && suggestedPackages.length > 0) {
+          response += `\n\nI found ${suggestedPackages.length} packages that match your preferences:`;
+        } else {
+          response += "\n\nI couldn't find exact matches, but here are some similar options:";
+          suggestedPackages = packages.slice(0, 3);
+        }
       } else {
-        response += "\n\nI couldn't find exact matches, but here are some similar options:";
-        suggestedPackages = packages.slice(0, 3);
+        // No specific preferences, show popular options
+        suggestedPackages = packages.slice(0, 5);
+        response += "\n\nHere are some popular ticket packages to get you started:";
       }
     }
 
@@ -133,7 +143,36 @@ export class NovaMicroService {
       return "You're welcome! I'm here whenever you need help finding the perfect ticket package.";
     }
     
-    // Default response
-    return "I understand you're looking for event tickets. Let me help you find the perfect package based on your preferences.";
+    // Generate response based on extracted preferences
+    let response = "I understand you're looking for event tickets.";
+    
+    if (preferences.location) {
+      response += ` I see you're interested in events in ${preferences.location}.`;
+    }
+    
+    if (preferences.sport) {
+      response += ` Looking for ${preferences.sport} games.`;
+    }
+    
+    if (preferences.peopleCount) {
+      response += ` For a group of ${preferences.peopleCount} people.`;
+    }
+    
+    if (preferences.hospitalityType) {
+      response += ` With ${preferences.hospitalityType} hospitality experience.`;
+    }
+    
+    if (preferences.budget) {
+      response += ` Within your budget of $${preferences.budget.min}-${preferences.budget.max}.`;
+    }
+    
+    // If no specific preferences were extracted but user is asking for something
+    if (Object.keys(preferences).length === 0 && 
+        (lowerQuery.includes('find') || lowerQuery.includes('show') || lowerQuery.includes('recommend') || 
+         lowerQuery.includes('suggest') || lowerQuery.includes('want') || lowerQuery.includes('looking'))) {
+      response = "I'd be happy to help you find the perfect ticket package! Let me show you some great options:";
+    }
+    
+    return response;
   }
 }
