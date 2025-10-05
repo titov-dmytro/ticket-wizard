@@ -6,10 +6,14 @@ frontend:
         - echo "Installing dependencies..."
         - rm -rf node_modules package-lock.json
         - npm cache clean --force
+        - export SKIP_PREFLIGHT_CHECK=true
+        - export GENERATE_SOURCEMAP=false
         - npm install --legacy-peer-deps --no-audit --no-fund
     build:
       commands:
         - echo "Building the app..."
+        - export SKIP_PREFLIGHT_CHECK=true
+        - export GENERATE_SOURCEMAP=false
         - npm run build
   artifacts:
     baseDirectory: build
