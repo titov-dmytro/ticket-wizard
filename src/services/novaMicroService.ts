@@ -40,59 +40,108 @@ export class NovaMicroService {
     const lowerQuery = query.toLowerCase();
     const preferences = currentPreferences || {};
 
-    // Extract preferences from natural language
-    if (lowerQuery.includes('location') || lowerQuery.includes('where')) {
-      const locationMatch = query.match(/(?:in|at|near)\s+([a-zA-Z\s]+)/i);
-      if (locationMatch) {
-        preferences.location = locationMatch[1].trim();
-      }
-    }
-
-    if (lowerQuery.includes('people') || lowerQuery.includes('group') || lowerQuery.includes('tickets')) {
-      const peopleMatch = query.match(/(\d+)\s+(?:people|tickets|group)/i);
-      if (peopleMatch) {
-        preferences.peopleCount = parseInt(peopleMatch[1]);
-      }
-    }
-
-    if (lowerQuery.includes('sport') || lowerQuery.includes('game')) {
-      const sports = ['basketball', 'football', 'baseball', 'hockey', 'soccer'];
-      for (const sport of sports) {
-        if (lowerQuery.includes(sport)) {
-          preferences.sport = sport;
+    // Extract preferences from natural language - improved patterns
+    
+    // Location extraction - more flexible patterns
+    if (lowerQuery.includes('location') || lowerQuery.includes('where') || lowerQuery.includes('in ') || 
+        lowerQuery.includes('at ') || lowerQuery.includes('near')) {
+      const locationPatterns = [
+        /(?:in|at|near|location)\s+([a-zA-Z\s]+?)(?:\s|$|,|\.|!|\?)/i,
+        /([a-zA-Z\s]+)\s+(?:area|city|stadium|venue)/i,
+        /(new york|los angeles|boston|chicago|dallas|san francisco|denver|green bay)/i
+      ];
+      
+      for (const pattern of locationPatterns) {
+        const match = query.match(pattern);
+        if (match) {
+          preferences.location = match[1].trim();
           break;
         }
       }
     }
 
-    if (lowerQuery.includes('hospitality') || lowerQuery.includes('vip') || lowerQuery.includes('club')) {
-      if (lowerQuery.includes('vip')) {
-        preferences.hospitalityType = 'VIP';
-      } else if (lowerQuery.includes('club')) {
-        preferences.hospitalityType = 'Club';
-      } else if (lowerQuery.includes('basic')) {
-        preferences.hospitalityType = 'Basic';
+    // People count extraction - more patterns
+    if (lowerQuery.includes('people') || lowerQuery.includes('group') || lowerQuery.includes('tickets') ||
+        lowerQuery.includes('person') || lowerQuery.includes('us') || lowerQuery.includes('friends')) {
+      const peoplePatterns = [
+        /(\d+)\s+(?:people|tickets|group|persons|friends)/i,
+        /(?:for|group of|party of)\s+(\d+)/i,
+        /(\d+)\s+(?:of us)/i
+      ];
+      
+      for (const pattern of peoplePatterns) {
+        const match = query.match(pattern);
+        if (match) {
+          preferences.peopleCount = parseInt(match[1]);
+          break;
+        }
       }
     }
 
-    if (lowerQuery.includes('date') || lowerQuery.includes('when')) {
-      const dateMatch = query.match(/(\d{4}-\d{2}-\d{2})/);
-      if (dateMatch) {
-        preferences.date = dateMatch[1];
+    // Sport extraction - include team names and more flexible matching
+    const sports = ['basketball', 'football', 'baseball', 'hockey', 'soccer'];
+    const teams = ['knicks', 'lakers', 'celtics', 'bulls', 'cowboys', 'patriots', 'yankees', 'red sox'];
+    
+    for (const sport of sports) {
+      if (lowerQuery.includes(sport)) {
+        preferences.sport = sport;
+        break;
+      }
+    }
+    
+    // Check for team names
+    if (!preferences.sport) {
+      for (const team of teams) {
+        if (lowerQuery.includes(team)) {
+          // Map teams to sports (simplified)
+          if (['knicks', 'lakers', 'celtics', 'bulls'].includes(team)) {
+            preferences.sport = 'basketball';
+          } else if (['cowboys', 'patriots'].includes(team)) {
+            preferences.sport = 'football';
+          } else if (['yankees', 'red sox'].includes(team)) {
+            preferences.sport = 'baseball';
+          }
+          break;
+        }
       }
     }
 
-    if (lowerQuery.includes('budget') || lowerQuery.includes('price') || lowerQuery.includes('cost')) {
-      const budgetMatch = query.match(/\$?(\d+)(?:\s*-\s*\$?(\d+))?/);
-      if (budgetMatch) {
-        const min = parseInt(budgetMatch[1]);
-        const max = budgetMatch[2] ? parseInt(budgetMatch[2]) : min * 2;
-        preferences.budget = { min, max };
+    // Hospitality extraction - more flexible
+    if (lowerQuery.includes('vip') || lowerQuery.includes('premium') || lowerQuery.includes('luxury')) {
+      preferences.hospitalityType = 'VIP';
+    } else if (lowerQuery.includes('club') || lowerQuery.includes('lounge')) {
+      preferences.hospitalityType = 'Club';
+    } else if (lowerQuery.includes('basic') || lowerQuery.includes('standard') || lowerQuery.includes('cheap')) {
+      preferences.hospitalityType = 'Basic';
+    }
+
+    // Price/budget extraction - more flexible
+    if (lowerQuery.includes('budget') || lowerQuery.includes('price') || lowerQuery.includes('cost') ||
+        lowerQuery.includes('under') || lowerQuery.includes('below') || lowerQuery.includes('cheap') ||
+        lowerQuery.includes('expensive') || lowerQuery.includes('$')) {
+      const budgetPatterns = [
+        /\$?(\d+)(?:\s*-\s*\$?(\d+))?/,
+        /(?:under|below|less than)\s*\$?(\d+)/i,
+        /(?:around|about)\s*\$?(\d+)/i
+      ];
+      
+      for (const pattern of budgetPatterns) {
+        const match = query.match(pattern);
+        if (match) {
+          const min = parseInt(match[1]);
+          const max = match[2] ? parseInt(match[2]) : (lowerQuery.includes('under') || lowerQuery.includes('below')) ? 1000 : min * 2;
+          preferences.budget = { min: 0, max };
+          break;
+        }
       }
     }
 
     // Generate response based on query type
     let response = this.generateResponse(query, preferences);
+    
+    // Debug logging (remove in production)
+    console.log('Query:', query);
+    console.log('Extracted preferences:', preferences);
     
     // If user is asking for recommendations, find packages
     let suggestedPackages: TicketPackage[] | undefined;
@@ -146,24 +195,29 @@ export class NovaMicroService {
     // Generate response based on extracted preferences
     let response = "I understand you're looking for event tickets.";
     
+    const extractedItems = [];
     if (preferences.location) {
-      response += ` I see you're interested in events in ${preferences.location}.`;
+      extractedItems.push(`events in ${preferences.location}`);
     }
     
     if (preferences.sport) {
-      response += ` Looking for ${preferences.sport} games.`;
+      extractedItems.push(`${preferences.sport} games`);
     }
     
     if (preferences.peopleCount) {
-      response += ` For a group of ${preferences.peopleCount} people.`;
+      extractedItems.push(`for ${preferences.peopleCount} people`);
     }
     
     if (preferences.hospitalityType) {
-      response += ` With ${preferences.hospitalityType} hospitality experience.`;
+      extractedItems.push(`with ${preferences.hospitalityType} hospitality`);
     }
     
     if (preferences.budget) {
-      response += ` Within your budget of $${preferences.budget.min}-${preferences.budget.max}.`;
+      extractedItems.push(`under $${preferences.budget.max}`);
+    }
+    
+    if (extractedItems.length > 0) {
+      response = `Perfect! I understand you're looking for ${extractedItems.join(', ')}.`;
     }
     
     // If no specific preferences were extracted but user is asking for something
