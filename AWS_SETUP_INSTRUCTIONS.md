@@ -3,8 +3,7 @@
 ## Prerequisites
 - AWS Account with appropriate permissions
 - AWS CLI installed and configured
-- Node.js and npm installed
-
+- Node.js and npm installed 
 ## Step 1: Create DynamoDB Table
 
 ```bash
