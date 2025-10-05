@@ -3,17 +3,14 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Installing dependencies..."
+        - echo "Switching to Vite build system..."
         - rm -rf node_modules package-lock.json
         - npm cache clean --force
-        - export SKIP_PREFLIGHT_CHECK=true
-        - export GENERATE_SOURCEMAP=false
-        - npm install --legacy-peer-deps --no-audit --no-fund
+        - cp package-vite.json package.json
+        - npm install --no-audit --no-fund
     build:
       commands:
-        - echo "Building the app..."
-        - export SKIP_PREFLIGHT_CHECK=true
-        - export GENERATE_SOURCEMAP=false
+        - echo "Building with Vite..."
         - npm run build
   artifacts:
     baseDirectory: build
