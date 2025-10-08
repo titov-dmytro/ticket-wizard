@@ -1,12 +1,22 @@
 import { UserPreferences, TicketPackage } from '../types';
+import { VectorRecommendationEngine } from './vectorRecommendationEngine';
+import { FAISSSearchService } from './faissSearchService';
 
 export class NovaMicroService {
   private apiKey: string;
   private baseUrl: string;
+  private faissService: FAISSSearchService | null = null;
 
   constructor() {
     this.apiKey = import.meta.env?.VITE_NOVA_MICRO_API_KEY || '';
     this.baseUrl = import.meta.env?.VITE_NOVA_MICRO_BASE_URL || 'https://api.nova-micro.com';
+  }
+
+  private initializeFAISSService(packages: TicketPackage[]): void {
+    if (!this.faissService) {
+      this.faissService = new FAISSSearchService(packages);
+      console.log('FAISS service initialized:', this.faissService.getPerformanceStats());
+    }
   }
 
   public async processUserQuery(
@@ -36,6 +46,12 @@ export class NovaMicroService {
     updatedPreferences?: UserPreferences;
     suggestedPackages?: TicketPackage[];
   }> {
+    // Initialize FAISS service for efficient search
+    this.initializeFAISSService(packages);
+    
+    // Fallback to vector engine if FAISS is not available
+    const vectorEngine = new VectorRecommendationEngine(packages);
+    
     const lowerQuery = query.toLowerCase();
     
     // Handle greeting and help queries directly
@@ -57,10 +73,6 @@ export class NovaMicroService {
       };
     }
 
-    // Use vector search for semantic matching
-    const { VectorRecommendationEngine } = await import('./vectorRecommendationEngine');
-    const vectorEngine = new VectorRecommendationEngine(packages);
-    
     // Check if user is looking for recommendations
     const isLookingForTickets = lowerQuery.includes('recommend') || lowerQuery.includes('suggest') || 
                                lowerQuery.includes('find') || lowerQuery.includes('show') || 
@@ -73,8 +85,18 @@ export class NovaMicroService {
 
     if (isLookingForTickets) {
       try {
-        // Use vector search for semantic recommendations
-        const recommendations = await vectorEngine.findRecommendationsByQuery(query);
+        // Use FAISS for efficient search, fallback to vector engine
+        let recommendations;
+        
+        if (this.faissService) {
+          const startTime = performance.now();
+          recommendations = await this.faissService.findRecommendationsByQuery(query);
+          const searchTime = performance.now() - startTime;
+          console.log(`FAISS search completed in ${searchTime.toFixed(2)}ms`);
+        } else {
+          console.log('Using fallback vector search');
+          recommendations = await vectorEngine.findRecommendationsByQuery(query);
+        }
         
         if (recommendations.length > 0) {
           suggestedPackages = recommendations.map(r => r.package);
